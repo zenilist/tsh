@@ -13,10 +13,7 @@ ysh is a basic shell implementation written in Python that allows users to execu
 
 You can install ysh using pip
 
-    ```
-    pip install ysh
-
-    ```
+    pip install ysh    
 
 ## Usage
 
