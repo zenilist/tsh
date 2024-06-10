@@ -194,6 +194,7 @@ def main():
     handler = CommandHandler()
     print("tsh>", end="", flush=True)
     listen_keyboard(
+        on_press=handler.process_key,
         on_release=handler.on_release,
         delay_second_char=0.05,
     )
