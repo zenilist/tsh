@@ -15,6 +15,8 @@ from sshkeyboard import listen_keyboard, stop_listening
 
 hist_loc = Path.home() / ".tsh_history"
 PROMPT = "tsh>"
+COLOR = "\033[93m"  # set to Yellow
+DEFAULT = "\033[0m"
 
 
 class CommandHandler:
@@ -95,12 +97,16 @@ class CommandHandler:
             if not self.exec_command("".join(self.buffer).strip()):
                 self.terminate()
             self.buffer = []
-            print(f"{PROMPT}", end="", flush=True)
+            print(f"{COLOR}{PROMPT}{DEFAULT}", end="", flush=True)
         elif key == "backspace":
             if self.buffer:
                 self.buffer.pop()
             print("\r\033[K", end="", flush=True)
-            print(f'{PROMPT}{"".join(map(str, self.buffer))}', end="", flush=True)
+            print(
+                f'{COLOR}{PROMPT}{DEFAULT}{"".join(map(str, self.buffer))}',
+                end="",
+                flush=True,
+            )
         elif key == "up":
             self.handle_history_event("up")
         elif key == "down":
@@ -135,7 +141,7 @@ class CommandHandler:
                 self.history_index += 1
         padding = len(self.previous_command) - len(cmd)
         padding = max(padding, 0)
-        print(f"\r{PROMPT}{cmd}{' ' * padding}", end="", flush=True)
+        print(f"\r{COLOR}{PROMPT}{DEFAULT}{cmd}{' ' * padding}", end="", flush=True)
         sys.stdout.write("\b" * padding)
         sys.stdout.flush()
         self.buffer = list(cmd)
@@ -182,7 +188,7 @@ class CommandHandler:
 def main():
     """Main entry point"""
     handler = CommandHandler()
-    print(f"{PROMPT}", end="", flush=True)
+    print(f"{COLOR}{PROMPT}{DEFAULT}", end="", flush=True)
     listen_keyboard(
         on_press=handler.process_key,
         on_release=handler.on_release,
