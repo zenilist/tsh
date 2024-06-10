@@ -35,16 +35,16 @@ class CommandHandler:
         self.history.append(cmd)
         self.history_index = len(self.history) - 1
 
-    def ch_dir(self, dir: Path | str):
+    def ch_dir(self, directory: Path | str):
         """Handles cd command"""
         try:
-            os.chdir(dir)
-            self.add_history(f"cd {dir}")
+            os.chdir(directory)
+            self.add_history(f"cd {directory}")
         except FileNotFoundError:
-            print(f"File {dir} not found!")
+            print(f"File {directory} not found!")
             return
         except PermissionError:
-            print(f"No execute permission on {dir}!")
+            print(f"No execute permission on {directory}!")
             return
 
     def exec_command(self, command: str):
@@ -55,11 +55,11 @@ class CommandHandler:
         if command.startswith("cd"):
             args = command.split()
             if len(args) < 2:
-                dir = Path.home()
+                directory = Path.home()
             else:
-                dir = args[1]
+                directory = args[1]
 
-            self.ch_dir(dir)
+            self.ch_dir(directory)
             return True
         if command == "history":
             for cmd in self.get_history():
@@ -67,15 +67,13 @@ class CommandHandler:
             self.add_history(command)
             return True
         try:
-            proc = subprocess.run(command, shell=True, capture_output=True)
+            proc = subprocess.run(command, shell=True, capture_output=True, check=True)
             print(proc.stdout.decode(), end="")
             print(proc.stderr.decode(), end="")
             if proc.returncode == 0:
                 self.add_history(command)
         except subprocess.CalledProcessError:
-            print(
-                f"Encountered unexcepted error when calling command: {command}", end=""
-            )
+            print(f"{command}: command not found")
         except KeyboardInterrupt:
             print("Process terminated")
         return True
@@ -101,24 +99,11 @@ class CommandHandler:
             self.handle_history_event("up")
         elif key == "down":
             self.handle_history_event("down")
-        elif key == "right":
-            pass
-        elif key == "left":
-            pass
-        elif key == "home":
-            pass
-        elif key == "end":
-            pass
-        elif key == "pageup":
-            pass
-        elif key == "pagedown":
+        elif key in {"right", "left", "home", "end", "pagedown", "pageup", "delete"}:
             pass
         # TODO: Implement Tab functionality
         elif key == "tab":
             pass
-        elif key == "delete":
-            pass
-
         else:
             if key == "space":
                 key = " "
@@ -143,8 +128,7 @@ class CommandHandler:
             if self.history_index < len(self.history):
                 self.history_index += 1
         padding = len(self.previous_command) - len(cmd)
-        if padding < 0:
-            padding = 0
+        padding = max(padding, 0)
         print(f"\rtsh>{cmd}{' ' * padding}", end="", flush=True)
         sys.stdout.write("\b" * padding)
         sys.stdout.flush()
@@ -162,7 +146,7 @@ class CommandHandler:
         if not hist_loc.is_file():
             hist_loc.touch()
             print("creating history file")
-        with open(hist_loc, "a") as f:
+        with open(hist_loc, "a", encoding="utf-8") as f:
             for i in range(self.old_history_index, len(self.history)):
                 f.write(self.history[i] + "\n")
             # f.write("\n".join(self.history[self.old_history_index :]))
@@ -183,7 +167,7 @@ class CommandHandler:
     def init_history(self):
         """Loads the tsh_history file"""
         if hist_loc.is_file():
-            with open(hist_loc, "r") as f:
+            with open(hist_loc, "r", encoding="utf-8") as f:
                 self.history.extend(line.strip() for line in f.readlines())
         self.old_history_index = len(self.history)
         self.history_index = self.old_history_index - 1
