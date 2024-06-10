@@ -1,6 +1,10 @@
+"""
+build configuration
+"""
+
 from setuptools import find_packages, setup
 
-with open("README.md", "r") as f:
+with open("README.md", "r", encoding="UTF-8") as f:
     long_description = f.read()
 VERSION = "0.0.1"
 setup(
