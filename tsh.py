@@ -14,6 +14,7 @@ from pathlib import Path
 from sshkeyboard import listen_keyboard, stop_listening
 
 hist_loc = Path.home() / ".tsh_history"
+PROMPT = "tsh>"
 
 
 class CommandHandler:
@@ -30,7 +31,12 @@ class CommandHandler:
     def add_history(self, cmd: str):
         """Adds command to the current history list
         ignores repeated history command"""
-        if self.history and self.history[-1] == "history" and cmd == "history":
+        if (
+            self.history
+            and self.history[-1] == "history"
+            and cmd == "history"
+            or cmd == ""
+        ):
             return
         self.history.append(cmd)
         self.history_index = len(self.history) - 1
@@ -89,12 +95,12 @@ class CommandHandler:
             if not self.exec_command("".join(self.buffer).strip()):
                 self.terminate()
             self.buffer = []
-            print("tsh>", end="", flush=True)
+            print(f"{PROMPT}", end="", flush=True)
         elif key == "backspace":
             if self.buffer:
                 self.buffer.pop()
             print("\r\033[K", end="", flush=True)
-            print(f'tsh>{"".join(map(str, self.buffer))}', end="", flush=True)
+            print(f'{PROMPT}{"".join(map(str, self.buffer))}', end="", flush=True)
         elif key == "up":
             self.handle_history_event("up")
         elif key == "down":
@@ -129,7 +135,7 @@ class CommandHandler:
                 self.history_index += 1
         padding = len(self.previous_command) - len(cmd)
         padding = max(padding, 0)
-        print(f"\rtsh>{cmd}{' ' * padding}", end="", flush=True)
+        print(f"\r{PROMPT}{cmd}{' ' * padding}", end="", flush=True)
         sys.stdout.write("\b" * padding)
         sys.stdout.flush()
         self.buffer = list(cmd)
@@ -176,7 +182,7 @@ class CommandHandler:
 def main():
     """Main entry point"""
     handler = CommandHandler()
-    print("tsh>", end="", flush=True)
+    print(f"{PROMPT}", end="", flush=True)
     listen_keyboard(
         on_press=handler.process_key,
         on_release=handler.on_release,
