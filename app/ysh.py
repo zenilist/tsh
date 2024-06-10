@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-tsh - A basic shell
+ysh - A basic shell
 
 This script provides a simple shell interface that can execute most Unix commands.
-It also saves all the commands in the ~/.tsh_history and provides support for 
+It also saves all the commands in the ~/.ysh_history and provides support for 
 the history command.
 """
 import os
@@ -13,8 +13,8 @@ from pathlib import Path
 
 from sshkeyboard import listen_keyboard, stop_listening
 
-hist_loc = Path.home() / ".tsh_history"
-PROMPT = "tsh>"
+hist_loc = Path.home() / ".ysh_history"
+PROMPT = "ysh>"
 COLOR = "\033[93m"  # set to Yellow
 DEFAULT = "\033[0m"
 
@@ -154,10 +154,9 @@ class CommandHandler:
             sys.exit()
 
     def save_history(self):
-        """Saves the current history to the .tsh_history"""
+        """Saves the current history to the .ysh_history"""
         if not hist_loc.is_file():
             hist_loc.touch()
-            print("creating history file")
         with open(hist_loc, "a", encoding="utf-8") as f:
             for i in range(self.old_history_index, len(self.history)):
                 f.write(self.history[i] + "\n")
@@ -177,7 +176,7 @@ class CommandHandler:
         return self.history
 
     def init_history(self):
-        """Loads the tsh_history file"""
+        """Loads the ysh_history file"""
         if hist_loc.is_file():
             with open(hist_loc, "r", encoding="utf-8") as f:
                 self.history.extend(line.strip() for line in f.readlines())
