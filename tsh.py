@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+"""
+tsh - A basic shell
+
+This script provides a simple shell interface that can execute most Unix commands.
+It also saves all the commands in the ~/.tsh_history and provides support for 
+the history command.
+"""
 import os
 import subprocess
 import sys
@@ -10,6 +17,8 @@ hist_loc = Path.home() / ".tsh_history"
 
 
 class CommandHandler:
+    """Handles unix command executions and parsing user input for the shell"""
+
     def __init__(self):
         self.buffer = []
         self.history = []
@@ -19,12 +28,15 @@ class CommandHandler:
         self.init_history()
 
     def add_history(self, cmd: str):
+        """Adds command to the current history list
+        ignores repeated history command"""
         if self.history and self.history[-1] == "history" and cmd == "history":
             return
         self.history.append(cmd)
         self.history_index = len(self.history) - 1
 
     def ch_dir(self, dir: Path | str):
+        """Handles cd command"""
         try:
             os.chdir(dir)
             self.add_history(f"cd {dir}")
@@ -68,7 +80,12 @@ class CommandHandler:
             print("Process terminated")
         return True
 
-    def process_key(self, key):
+    def process_key(self, key: str):
+        """Processes user key press
+        enter executes the command
+        backspace deletes last character on the shell
+        exit terminates the session"""
+
         if key == "enter":
             print()
             if not self.exec_command("".join(self.buffer).strip()):
@@ -96,7 +113,7 @@ class CommandHandler:
             pass
         elif key == "pagedown":
             pass
-        # TODO: IMplement Tab functionality
+        # TODO: Implement Tab functionality
         elif key == "tab":
             pass
         elif key == "delete":
@@ -108,7 +125,7 @@ class CommandHandler:
             self.buffer.append(key)
             print(key, end="", flush=True)
 
-    def handle_history_event(self, key):
+    def handle_history_event(self, key: str):
         """Shows the previous/next command if the up or down arrow is pressed"""
         cmd = ""
         if key == "up":
@@ -134,13 +151,14 @@ class CommandHandler:
         self.buffer = list(cmd)
         self.previous_command = cmd
 
-    def on_release(self, key):
+    def on_release(self, key: str):
         """Handles key release events"""
         if key == "esc":
             self.save_history()
             sys.exit()
 
     def save_history(self):
+        """Saves the current history to the .tsh_history"""
         if not hist_loc.is_file():
             hist_loc.touch()
             print("creating history file")
@@ -150,17 +168,20 @@ class CommandHandler:
             # f.write("\n".join(self.history[self.old_history_index :]))
 
     def terminate(self):
+        """Exits the shell"""
         self.save_history()
         stop_listening()
         try:
             sys.exit()
-        except:
+        except SystemExit:
             pass
 
     def get_history(self):
+        """returns the entire history of commands"""
         return self.history
 
     def init_history(self):
+        """Loads the tsh_history file"""
         if hist_loc.is_file():
             with open(hist_loc, "r") as f:
                 self.history.extend(line.strip() for line in f.readlines())
@@ -169,10 +190,10 @@ class CommandHandler:
 
 
 def main():
+    """Main entry point"""
     handler = CommandHandler()
     print("tsh>", end="", flush=True)
     listen_keyboard(
-        on_press=handler.process_key,
         on_release=handler.on_release,
         delay_second_char=0.05,
     )
