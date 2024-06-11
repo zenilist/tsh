@@ -41,7 +41,7 @@ class CommandHandler:
         ):
             return
         self.history.append(cmd)
-        self.history_index = len(self.history) - 1
+        self.history_index = len(self.history)
 
     def ch_dir(self, directory: Path | str):
         """Handles cd command"""
@@ -50,10 +50,10 @@ class CommandHandler:
             self.add_history(f"cd {directory}")
         except FileNotFoundError:
             print(f"File {directory} not found!")
-            return
         except PermissionError:
             print(f"No execute permission on {directory}!")
-            return
+        except NotADirectoryError:
+            print(f"{directory} is not a directory!")
 
     def exec_command(self, command: str):
         """Execute the user command by creating a sub process and save to history"""
@@ -86,6 +86,38 @@ class CommandHandler:
             print("Process terminated")
         return True
 
+    def handle_history_event(self, key: str):
+        """Shows the previous/next command if the up or down arrow is pressed"""
+        cmd = ""
+        if key == "up":
+            if self.history_index > 0:
+                self.history_index -= 1
+            if len(self.history) > 0 and len(self.history) > self.history_index:
+                cmd = self.history[self.history_index]
+        elif key == "down":
+            if self.history_index < len(self.history) - 1:
+                self.history_index += 1
+            if len(self.history) > 0 and len(self.history) > self.history_index:
+                cmd = self.history[self.history_index]
+            elif self.history:
+                cmd = self.history[self.history_index - 1]  # get last command
+        padding = len(self.previous_command) - len(cmd)
+        padding = max(padding, 0)
+        print(f"\r{COLOR}{PROMPT}{DEFAULT}{cmd}{' ' * padding}", end="", flush=True)
+        sys.stdout.write("\b" * padding)
+        sys.stdout.flush()
+        self.buffer = list(cmd)
+        self.previous_command = cmd
+
+    def terminate(self):
+        """Exits the shell"""
+        self.save_history()
+        stop_listening()
+        try:
+            sys.exit()
+        except SystemExit:
+            pass
+
     def process_key(self, key: str):
         """Processes user key press
         enter executes the command
@@ -113,39 +145,68 @@ class CommandHandler:
             self.handle_history_event("down")
         elif key in {"right", "left", "home", "end", "pagedown", "pageup", "delete"}:
             pass
-        # TODO: Implement Tab functionality
         elif key == "tab":
-            pass
+            self.handle_tab_event()
         else:
             if key == "space":
                 key = " "
             self.buffer.append(key)
             print(key, end="", flush=True)
 
-    def handle_history_event(self, key: str):
-        """Shows the previous/next command if the up or down arrow is pressed"""
-        cmd = ""
-        if key == "up":
-            if len(self.history) > 0 and len(self.history) > self.history_index:
-                cmd = self.history[self.history_index]
-            else:
-                cmd = ""
-            if self.history_index > 0:
-                self.history_index -= 1
-        elif key == "down":
-            if len(self.history) > 0 and len(self.history) > self.history_index:
-                cmd = self.history[self.history_index]
-            else:
-                cmd = ""
-            if self.history_index < len(self.history):
-                self.history_index += 1
-        padding = len(self.previous_command) - len(cmd)
-        padding = max(padding, 0)
-        print(f"\r{COLOR}{PROMPT}{DEFAULT}{cmd}{' ' * padding}", end="", flush=True)
-        sys.stdout.write("\b" * padding)
-        sys.stdout.flush()
-        self.buffer = list(cmd)
-        self.previous_command = cmd
+    def get_completions(self, text):
+        """Get a list of possible completions for the given text"""
+        if "~" in text:
+            text = os.path.expanduser(text)
+
+        if os.path.sep not in text:
+            completions = [cmd for cmd in os.listdir(".") if cmd.startswith(text)]
+        else:
+            dirname, rest = os.path.split(text)
+            if not dirname:
+                dirname = "."
+            try:
+                completions = [
+                    os.path.join(dirname, cmd)
+                    for cmd in os.listdir(dirname)
+                    if cmd.startswith(rest)
+                ]
+            except FileNotFoundError:
+                completions = []
+
+        return completions
+
+    def get_prefix_cmd(self):
+        """returns prefix cmd for use in a tab completion event"""
+        buffer_str = "".join(self.buffer)
+        valid_cmds = {"cd ", "ls ", "pwd ", "grep "}
+        for cmd in valid_cmds:
+            if buffer_str.startswith(cmd):
+                return cmd
+        return ""
+
+    def handle_tab_event(self):
+        """Handles the tab completion event"""
+        prefix_cmd = self.get_prefix_cmd()
+        if not prefix_cmd:
+            return
+        text_to_complete = "".join(self.buffer)[len(prefix_cmd) :]
+        completions = self.get_completions(text_to_complete)
+        if completions:
+            common_prefix = os.path.commonprefix(completions)
+            self.buffer = list(prefix_cmd + common_prefix)
+            print("\r\033[K", end="", flush=True)
+            print(
+                f'{COLOR}{PROMPT}{DEFAULT}{"".join(map(str, self.buffer))}',
+                end="",
+                flush=True,
+            )
+            if len(completions) > 1:
+                print("\n" + "  ".join(completions))
+                print(
+                    f'{COLOR}{PROMPT}{DEFAULT}{"".join(map(str, self.buffer))}',
+                    end="",
+                    flush=True,
+                )
 
     def on_release(self, key: str):
         """Handles key release events"""
@@ -162,17 +223,8 @@ class CommandHandler:
                 f.write(self.history[i] + "\n")
             # f.write("\n".join(self.history[self.old_history_index :]))
 
-    def terminate(self):
-        """Exits the shell"""
-        self.save_history()
-        stop_listening()
-        try:
-            sys.exit()
-        except SystemExit:
-            pass
-
     def get_history(self):
-        """returns the entire history of commands"""
+        """returns the entire list of ran commands"""
         return self.history
 
     def init_history(self):
