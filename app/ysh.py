@@ -41,7 +41,7 @@ class CommandHandler:
         ):
             return
         self.history.append(cmd)
-        self.history_index = len(self.history) - 1
+        self.history_index = len(self.history)
 
     def ch_dir(self, directory: Path | str):
         """Handles cd command"""
@@ -90,19 +90,17 @@ class CommandHandler:
         """Shows the previous/next command if the up or down arrow is pressed"""
         cmd = ""
         if key == "up":
-            if len(self.history) > 0 and len(self.history) > self.history_index:
-                cmd = self.history[self.history_index]
-            else:
-                cmd = ""
             if self.history_index > 0:
                 self.history_index -= 1
-        elif key == "down":
             if len(self.history) > 0 and len(self.history) > self.history_index:
                 cmd = self.history[self.history_index]
-            else:
-                cmd = ""
-            if self.history_index < len(self.history):
+        elif key == "down":
+            if self.history_index < len(self.history) - 1:
                 self.history_index += 1
+            if len(self.history) > 0 and len(self.history) > self.history_index:
+                cmd = self.history[self.history_index]
+            elif self.history:
+                cmd = self.history[self.history_index - 1]  # get last command
         padding = len(self.previous_command) - len(cmd)
         padding = max(padding, 0)
         print(f"\r{COLOR}{PROMPT}{DEFAULT}{cmd}{' ' * padding}", end="", flush=True)
