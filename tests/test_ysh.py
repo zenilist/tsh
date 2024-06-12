@@ -33,9 +33,7 @@ class TestYsh(unittest.TestCase):
         self.assertTrue(result)
         self.assertIn("echo Test", self.handler.history)
         self.assertEqual(self.handler.history_index, len(self.handler.history))
-        mock_run.assert_called_with(
-            "echo Test", shell=True, capture_output=True, check=True
-        )
+        mock_run.assert_called_with(["echo", "Test"], capture_output=True, check=True)
 
     def test_ch_dir(self):
         """test change directory implementation"""

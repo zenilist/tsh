@@ -57,6 +57,8 @@ class CommandHandler:
 
     def exec_command(self, command: str):
         """Execute the user command by creating a sub process and save to history"""
+        if command == "":
+            return
         if command == "exit":
             self.add_history(command)
             return False
@@ -74,14 +76,28 @@ class CommandHandler:
                 print(cmd)
             self.add_history(command)
             return True
+        has_args = False
         try:
-            proc = subprocess.run(command, shell=True, capture_output=True, check=True)
+            cmd, args = command.split(" ")
+            has_args = True
+        except ValueError:
+            cmd = command
+            args = ""
+        try:
+            if has_args:
+                proc = subprocess.run([cmd, args], capture_output=True, check=True)
+            else:
+                proc = subprocess.run([cmd], capture_output=True, check=True)
             print(proc.stdout.decode(), end="")
             print(proc.stderr.decode(), end="")
             if proc.returncode == 0:
                 self.add_history(command)
-        except subprocess.CalledProcessError:
-            print(f"{command}: command not found")
+        except subprocess.CalledProcessError as err:
+            print(err.stderr.decode(), end="")
+        except FileNotFoundError:
+            print(f"Could not find command: {cmd}")
+        except PermissionError:
+            print(f"Could not find command: {cmd}")
         except KeyboardInterrupt:
             print("Process terminated")
         return True
@@ -126,7 +142,8 @@ class CommandHandler:
 
         if key == "enter":
             print()
-            if not self.exec_command("".join(self.buffer).strip()):
+            command = "".join(self.buffer).strip()
+            if command != "" and not self.exec_command(command):
                 self.terminate()
             self.buffer = []
             print(f"{COLOR}{PROMPT}{DEFAULT}", end="", flush=True)
