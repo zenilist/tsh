@@ -20,7 +20,6 @@ except ModuleNotFoundError:
     from config import Config
 
 hist_loc = Path.home() / ".ysh_history"
-alias_cmds = {}
 PROMPT = "ysh>"
 COLOR = "\033[93m"  # set to Yellow
 DEFAULT = "\033[0m"
@@ -36,6 +35,7 @@ class CommandHandler:
         self.old_history_index = 0
         self.previous_command = ""
         self.init_history()
+        self.alias_cmds = Config().get_alias()
 
     def add_history(self, cmd: str):
         """Adds command to the current history list
@@ -62,65 +62,43 @@ class CommandHandler:
         except NotADirectoryError:
             print(f"{directory} is not a directory!")
 
+    def _change_dir(self, args: list[str]) -> None:
+        if len(args) < 2:
+            directory = Path.home()
+        else:
+            directory = args[1]
+        self.ch_dir(directory)
+
+    def _print_history(self) -> None:
+        for cmd in self.get_history():
+            print(cmd)
+
     def exec_command(self, command: str):
         """Execute the user command by creating a sub process and save to history"""
-        if command in alias_cmds:
-            command = alias_cmds[command]
+        self.add_history(command)
+        if command in self.alias_cmds:
+            command = self.alias_cmds[command]
         if command == "":
-            return
+            return True
         if command == "exit":
-            self.add_history(command)
             return False
         if command.startswith("cd"):
-            args = command.split()
-            if len(args) < 2:
-                directory = Path.home()
-            else:
-                directory = args[1]
-
-            self.ch_dir(directory)
+            self._change_dir(command.split())
             return True
         if command == "history":
-            for cmd in self.get_history():
-                print(cmd)
-            self.add_history(command)
+            self._print_history()
             return True
-        has_args = False
         try:
             cmd, args = shlex.split(command)
-            has_args = True
         except ValueError:
             cmd = command
             args = ""
         try:
-            if has_args:
-                proc = subprocess.Popen(
-                    [cmd, args],
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                )
-            else:
-                proc = subprocess.Popen(
-                    [cmd],
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                )
-            proc.wait()
-            output, errors = "", ""
-            try:
-                output, errors = proc.communicate()
-            except ValueError:
-                print(
-                    "Value errored occured while unpacking output and errors from subprocess! Assigning null values"
-                )
+            output, error = self._run_subprocess(cmd, args)
             print(output, end="")
-            print(errors, end="")
-            if proc.returncode == 0:
-                self.add_history(command)
+            print(error, end="")
+        except ValueError:
+            print(f"Failed to run command: {cmd}")
         except subprocess.CalledProcessError as err:
             print(err.stderr.decode(), end="")
         except FileNotFoundError:
@@ -130,6 +108,15 @@ class CommandHandler:
         except KeyboardInterrupt:
             print("Process terminated")
         return True
+
+    def _run_subprocess(self, cmd: str, args) -> tuple[str, str]:
+        return subprocess.Popen(
+            [cmd, args] if args else [cmd],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        ).communicate()
 
     def handle_history_event(self, key: str):
         """Shows the previous/next command if the up or down arrow is pressed"""
@@ -286,9 +273,7 @@ class CommandHandler:
 
 def main():
     """Main entry point"""
-    global alias_cmds
     handler = CommandHandler()
-    alias_cmds = Config().get_alias()
     print(f"{COLOR}{PROMPT}{DEFAULT}", end="", flush=True)
     listen_keyboard(
         on_press=handler.process_key,
