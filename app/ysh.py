@@ -14,7 +14,13 @@ from pathlib import Path
 
 from sshkeyboard import listen_keyboard, stop_listening
 
+try:
+    from app.config import Config
+except ModuleNotFoundError:
+    from config import Config
+
 hist_loc = Path.home() / ".ysh_history"
+alias_cmds = {}
 PROMPT = "ysh>"
 COLOR = "\033[93m"  # set to Yellow
 DEFAULT = "\033[0m"
@@ -58,6 +64,8 @@ class CommandHandler:
 
     def exec_command(self, command: str):
         """Execute the user command by creating a sub process and save to history"""
+        if command in alias_cmds:
+            command = alias_cmds[command]
         if command == "":
             return
         if command == "exit":
@@ -278,7 +286,9 @@ class CommandHandler:
 
 def main():
     """Main entry point"""
+    global alias_cmds
     handler = CommandHandler()
+    alias_cmds = Config().get_alias()
     print(f"{COLOR}{PROMPT}{DEFAULT}", end="", flush=True)
     listen_keyboard(
         on_press=handler.process_key,
