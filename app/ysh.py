@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 ysh - A basic shell
 
@@ -6,7 +5,9 @@ This script provides a simple shell interface that can execute most Unix command
 It also saves all the commands in the ~/.ysh_history and provides support for 
 the history command.
 """
+
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -78,18 +79,38 @@ class CommandHandler:
             return True
         has_args = False
         try:
-            cmd, args = command.split(" ")
+            cmd, args = shlex.split(command)
             has_args = True
         except ValueError:
             cmd = command
             args = ""
         try:
             if has_args:
-                proc = subprocess.run([cmd, args], capture_output=True, check=True)
+                proc = subprocess.Popen(
+                    [cmd, args],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
             else:
-                proc = subprocess.run([cmd], capture_output=True, check=True)
-            print(proc.stdout.decode(), end="")
-            print(proc.stderr.decode(), end="")
+                proc = subprocess.Popen(
+                    [cmd],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+            proc.wait()
+            output, errors = "", ""
+            try:
+                output, errors = proc.communicate()
+            except ValueError:
+                print(
+                    "Value errored occured while unpacking output and errors from subprocess! Assigning null values"
+                )
+            print(output, end="")
+            print(errors, end="")
             if proc.returncode == 0:
                 self.add_history(command)
         except subprocess.CalledProcessError as err:
@@ -130,6 +151,7 @@ class CommandHandler:
         self.save_history()
         stop_listening()
         try:
+            sys.stdout.flush()
             sys.exit()
         except SystemExit:
             pass
@@ -145,8 +167,9 @@ class CommandHandler:
             command = "".join(self.buffer).strip()
             if command != "" and not self.exec_command(command):
                 self.terminate()
-            self.buffer = []
-            print(f"{COLOR}{PROMPT}{DEFAULT}", end="", flush=True)
+            else:
+                self.buffer = []
+                print(f"{COLOR}{PROMPT}{DEFAULT}", end="", flush=True)
         elif key == "backspace":
             if self.buffer:
                 self.buffer.pop()
