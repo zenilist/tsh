@@ -4,6 +4,7 @@ test suite for tsh
 """
 
 import os
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
@@ -21,7 +22,7 @@ class TestYsh(unittest.TestCase):
     def tearDown(self):
         os.chdir(self.original_cwd)
 
-    @patch("subprocess.run")
+    @patch("subprocess.Popen")
     def test_exec_command(self, mock_run):
         """test if command execution properly works"""
         mock_run.return_value = MagicMock(
@@ -34,7 +35,11 @@ class TestYsh(unittest.TestCase):
         self.assertIn("echo Test", self.handler.history)
         self.assertEqual(self.handler.history_index, len(self.handler.history))
         mock_run.assert_called_with(
-            "echo Test", shell=True, capture_output=True, check=True
+            ["echo", "Test"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
 
     def test_ch_dir(self):

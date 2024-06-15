@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 ysh - A basic shell
 
@@ -6,12 +5,19 @@ This script provides a simple shell interface that can execute most Unix command
 It also saves all the commands in the ~/.ysh_history and provides support for 
 the history command.
 """
+
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
 
 from sshkeyboard import listen_keyboard, stop_listening
+
+try:
+    from app.config import Config
+except ModuleNotFoundError:
+    from config import Config
 
 hist_loc = Path.home() / ".ysh_history"
 PROMPT = "ysh>"
@@ -29,6 +35,7 @@ class CommandHandler:
         self.old_history_index = 0
         self.previous_command = ""
         self.init_history()
+        self.alias_cmds = Config().get_alias()
 
     def add_history(self, cmd: str):
         """Adds command to the current history list
@@ -55,36 +62,61 @@ class CommandHandler:
         except NotADirectoryError:
             print(f"{directory} is not a directory!")
 
+    def _change_dir(self, args: list[str]) -> None:
+        if len(args) < 2:
+            directory = Path.home()
+        else:
+            directory = args[1]
+        self.ch_dir(directory)
+
+    def _print_history(self) -> None:
+        for cmd in self.get_history():
+            print(cmd)
+
     def exec_command(self, command: str):
         """Execute the user command by creating a sub process and save to history"""
+        self.add_history(command)
+        if command in self.alias_cmds:
+            command = self.alias_cmds[command]
+        if command == "":
+            return True
         if command == "exit":
-            self.add_history(command)
             return False
         if command.startswith("cd"):
-            args = command.split()
-            if len(args) < 2:
-                directory = Path.home()
-            else:
-                directory = args[1]
-
-            self.ch_dir(directory)
+            self._change_dir(command.split())
             return True
         if command == "history":
-            for cmd in self.get_history():
-                print(cmd)
-            self.add_history(command)
+            self._print_history()
             return True
         try:
-            proc = subprocess.run(command, shell=True, capture_output=True, check=True)
-            print(proc.stdout.decode(), end="")
-            print(proc.stderr.decode(), end="")
-            if proc.returncode == 0:
-                self.add_history(command)
-        except subprocess.CalledProcessError:
-            print(f"{command}: command not found")
+            cmd, args = shlex.split(command)
+        except ValueError:
+            cmd = command
+            args = ""
+        try:
+            output, error = self._run_subprocess(cmd, args)
+            print(output, end="")
+            print(error, end="")
+        except ValueError:
+            print(f"Failed to run command: {cmd}")
+        except subprocess.CalledProcessError as err:
+            print(err.stderr.decode(), end="")
+        except FileNotFoundError:
+            print(f"Could not find command: {cmd}")
+        except PermissionError:
+            print(f"Could not find command: {cmd}")
         except KeyboardInterrupt:
             print("Process terminated")
         return True
+
+    def _run_subprocess(self, cmd: str, args) -> tuple[str, str]:
+        return subprocess.Popen(
+            [cmd, args] if args else [cmd],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        ).communicate()
 
     def handle_history_event(self, key: str):
         """Shows the previous/next command if the up or down arrow is pressed"""
@@ -114,6 +146,7 @@ class CommandHandler:
         self.save_history()
         stop_listening()
         try:
+            sys.stdout.flush()
             sys.exit()
         except SystemExit:
             pass
@@ -126,10 +159,12 @@ class CommandHandler:
 
         if key == "enter":
             print()
-            if not self.exec_command("".join(self.buffer).strip()):
+            command = "".join(self.buffer).strip()
+            if command != "" and not self.exec_command(command):
                 self.terminate()
-            self.buffer = []
-            print(f"{COLOR}{PROMPT}{DEFAULT}", end="", flush=True)
+            else:
+                self.buffer = []
+                print(f"{COLOR}{PROMPT}{DEFAULT}", end="", flush=True)
         elif key == "backspace":
             if self.buffer:
                 self.buffer.pop()
