@@ -7,6 +7,10 @@ from pathlib import Path
 
 
 class Config:
+    """
+    This class provides the ability to get handle the behavior of the configuration files for ysh
+    """
+
     _conf = Path.home() / ".yshrc"
     _alias_to_cmd = {}
     _pattern = r'alias\s+([^"]+)\s*=\s*"(.+)"'
@@ -23,8 +27,14 @@ class Config:
         """
         return self._alias_to_cmd
 
+    def get_config_loc(self) -> Path:
+        """
+        returns the location of the config file
+        """
+        return self._conf
+
     def _load_alias(self) -> None:
-        with open(self._conf, "r") as f:
+        with open(self._conf, "r", encoding="utf-8") as f:
             conf_lines = f.readlines()
         for line in conf_lines:
             match = re.search(self._pattern, line)
