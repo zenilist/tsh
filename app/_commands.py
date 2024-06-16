@@ -1,3 +1,7 @@
+"""
+Module to store various command related functionality
+"""
+
 import os
 
 
@@ -18,6 +22,26 @@ class Commands:
                 commands(set(str)): Set of all the commands
         """
         return self.commands
+
+    def search_command(self, command_name: str) -> str:
+        """
+        Search for a specific command and return its full path if found.
+
+        Args:
+            command_name (str): Name of the command to search for.
+
+        Returns:
+            str: Full path of the command if found, empty string if not found.
+        """
+        for path in self.commands:
+            cmd_path = os.path.join(path, command_name)
+            if (
+                os.path.exists(cmd_path)
+                and os.access(cmd_path, os.X_OK)
+                and not os.path.isdir(cmd_path)
+            ):
+                return cmd_path
+        return ""
 
     def _fill_commands(self) -> None:
         paths = ["/bin", "usr/bin", "sbin", "usr/sbin"]

@@ -9,6 +9,7 @@ ysh is a basic shell implementation written in Python that allows users to execu
 - Command history is persistent: All executed commands are saved in `~/.ysh_history`.
 - Tab completion functionality.
 - Aliases can be saved in the config '~/.yashrc' file. eg: ```alias ll = 'ls -l'```
+- Syntax highlighting (currently only highlights known commands and aliases)
 
 ## Installation
 
