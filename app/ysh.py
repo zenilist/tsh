@@ -15,14 +15,18 @@ from pathlib import Path
 from sshkeyboard import listen_keyboard, stop_listening
 
 try:
+    from app._commands import Commands
     from app.config import Config
 except ModuleNotFoundError:
+    from _commands import Commands
     from config import Config
 
 hist_loc = Path.home() / ".ysh_history"
 PROMPT = "ysh>"
-COLOR = "\033[93m"  # set to Yellow
+YELLOW = "\033[93m"
 DEFAULT = "\033[0m"
+RED = "\033[91m"
+BLUE = "\033[94m"
 
 
 class CommandHandler:
@@ -30,25 +34,38 @@ class CommandHandler:
 
     def __init__(self):
         self.buffer = []
-        self.history = []
-        self.history_index = 0
-        self.old_history_index = 0
-        self.previous_command = ""
+        self.history_settings = {
+            "history": [],
+            "history_index": 0,
+            "old_history_index": 0,
+            "previous_command": "",
+        }
         self.init_history()
         self.alias_cmds = Config().get_alias()
+        self._fill_commands()
+        self.colorized = False
+        self.sep = False
+        self.command = ""
+
+    def _fill_commands(self) -> None:
+        self.commands = Commands().get_commands()
+        self.commands.add("history")
+        self.commands.add("cd")
+        self.commands.add("exit")
+        self.commands.update(self.alias_cmds)
 
     def add_history(self, cmd: str):
         """Adds command to the current history list
         ignores repeated history command"""
         if (
-            self.history
-            and self.history[-1] == "history"
+            self.history_settings["history"]
+            and self.history_settings["history"][-1] == "history"
             and cmd == "history"
             or cmd == ""
         ):
             return
-        self.history.append(cmd)
-        self.history_index = len(self.history)
+        self.history_settings["history"].append(cmd)
+        self.history_settings["history_index"] = len(self.history_settings["history"])
 
     def ch_dir(self, directory: Path | str):
         """Handles cd command"""
@@ -122,24 +139,41 @@ class CommandHandler:
         """Shows the previous/next command if the up or down arrow is pressed"""
         cmd = ""
         if key == "up":
-            if self.history_index > 0:
-                self.history_index -= 1
-            if len(self.history) > 0 and len(self.history) > self.history_index:
-                cmd = self.history[self.history_index]
+            if self.history_settings["history_index"] > 0:
+                self.history_settings["history_index"] -= 1
+            if (
+                len(self.history_settings["history"]) > 0
+                and len(self.history_settings["history"])
+                > self.history_settings["history_index"]
+            ):
+                cmd = self.history_settings["history"][
+                    self.history_settings["history_index"]
+                ]
         elif key == "down":
-            if self.history_index < len(self.history) - 1:
-                self.history_index += 1
-            if len(self.history) > 0 and len(self.history) > self.history_index:
-                cmd = self.history[self.history_index]
-            elif self.history:
-                cmd = self.history[self.history_index - 1]  # get last command
-        padding = len(self.previous_command) - len(cmd)
+            if (
+                self.history_settings["history_index"]
+                < len(self.history_settings["history"]) - 1
+            ):
+                self.history_settings["history_index"] += 1
+            if (
+                len(self.history_settings["history"]) > 0
+                and len(self.history_settings["history"])
+                > self.history_settings["history_index"]
+            ):
+                cmd = self.history_settings["history"][
+                    self.history_settings["history_index"]
+                ]
+            elif self.history_settings["history"]:
+                cmd = self.history_settings["history"][
+                    self.history_settings["history_index"] - 1
+                ]  # get last command
+        padding = len(self.history_settings["previous_command"]) - len(cmd)
         padding = max(padding, 0)
-        print(f"\r{COLOR}{PROMPT}{DEFAULT}{cmd}{' ' * padding}", end="", flush=True)
+        print(f"\r{YELLOW}{PROMPT}{DEFAULT}{cmd}{' ' * padding}", end="", flush=True)
         sys.stdout.write("\b" * padding)
         sys.stdout.flush()
         self.buffer = list(cmd)
-        self.previous_command = cmd
+        self.history_settings["previous_command"] = cmd
 
     def terminate(self):
         """Exits the shell"""
@@ -158,22 +192,9 @@ class CommandHandler:
         exit terminates the session"""
 
         if key == "enter":
-            print()
-            command = "".join(self.buffer).strip()
-            if command != "" and not self.exec_command(command):
-                self.terminate()
-            else:
-                self.buffer = []
-                print(f"{COLOR}{PROMPT}{DEFAULT}", end="", flush=True)
+            self._enter()
         elif key == "backspace":
-            if self.buffer:
-                self.buffer.pop()
-            print("\r\033[K", end="", flush=True)
-            print(
-                f'{COLOR}{PROMPT}{DEFAULT}{"".join(map(str, self.buffer))}',
-                end="",
-                flush=True,
-            )
+            self._backspace()
         elif key == "up":
             self.handle_history_event("up")
         elif key == "down":
@@ -183,10 +204,73 @@ class CommandHandler:
         elif key == "tab":
             self.handle_tab_event()
         else:
-            if key == "space":
-                key = " "
-            self.buffer.append(key)
-            print(key, end="", flush=True)
+            self._default(key)
+
+    def _default(self, key) -> None:
+        if key == "space":
+            key = " "
+            self.sep = True
+        self.buffer.append(key)
+        buffer = "".join(self.buffer)
+        if self._is_command(buffer):
+            self._colorize_cmd(RED)
+            self.colorized = True
+            self.command = buffer
+        else:
+            if self.colorized and not self.sep:
+                self._colorize_cmd(DEFAULT)
+                self.colorized = False
+            else:
+                print(key, end="", flush=True)
+
+    def _enter(self) -> None:
+        print()
+        command = "".join(self.buffer).strip()
+        self.command = ""
+        self.sep = False
+        if command != "" and not self.exec_command(command):
+            self.terminate()
+        else:
+            self.buffer = []
+            print(f"{YELLOW}{PROMPT}{DEFAULT}", end="", flush=True)
+
+    def _backspace(self) -> None:
+        if self.buffer:
+            self.buffer.pop()
+            if " " not in self.buffer:
+                self.sep = False
+            if len(self.buffer) < len(self.command):
+                self.command = ""
+        if self.command != "":
+            print("\r\033[K", end="", flush=True)
+            print(
+                f"{YELLOW}{PROMPT}{RED}{self.command}{DEFAULT}"
+                f'{"".join(self.buffer[len(self.command):])}',
+                end="",
+                flush=True,
+            )
+        else:
+            print("\r\033[K", end="", flush=True)
+            print(
+                f'{YELLOW}{PROMPT}{DEFAULT}{"".join(map(str, self.buffer))}',
+                end="",
+                flush=True,
+            )
+
+    def _is_command(self, buffer: str) -> bool:
+        if buffer in self.commands:
+            return True
+        return False
+
+    def _colorize_cmd(self, color: str) -> None:
+        padding = len(self.buffer) - 1
+        print(
+            f"\r{YELLOW}{PROMPT}{color}{''.join(self.buffer)}{DEFAULT}{' ' * padding}",
+            end="",
+            flush=True,
+        )
+        sys.stdout.write("\b" * padding)
+        sys.stdout.flush()
 
     def get_completions(self, text):
         """Get a list of possible completions for the given text"""
@@ -231,14 +315,14 @@ class CommandHandler:
             self.buffer = list(prefix_cmd + common_prefix)
             print("\r\033[K", end="", flush=True)
             print(
-                f'{COLOR}{PROMPT}{DEFAULT}{"".join(map(str, self.buffer))}',
+                f'{YELLOW}{PROMPT}{DEFAULT}{"".join(map(str, self.buffer))}',
                 end="",
                 flush=True,
             )
             if len(completions) > 1:
                 print("\n" + "  ".join(completions))
                 print(
-                    f'{COLOR}{PROMPT}{DEFAULT}{"".join(map(str, self.buffer))}',
+                    f'{YELLOW}{PROMPT}{DEFAULT}{"".join(map(str, self.buffer))}',
                     end="",
                     flush=True,
                 )
@@ -254,27 +338,36 @@ class CommandHandler:
         if not hist_loc.is_file():
             hist_loc.touch()
         with open(hist_loc, "a", encoding="utf-8") as f:
-            for i in range(self.old_history_index, len(self.history)):
-                f.write(self.history[i] + "\n")
+            for i in range(
+                self.history_settings["old_history_index"],
+                len(self.history_settings["history"]),
+            ):
+                f.write(self.history_settings["history"][i] + "\n")
             # f.write("\n".join(self.history[self.old_history_index :]))
 
     def get_history(self):
         """returns the entire list of ran commands"""
-        return self.history
+        return self.history_settings["history"]
 
     def init_history(self):
         """Loads the ysh_history file"""
         if hist_loc.is_file():
             with open(hist_loc, "r", encoding="utf-8") as f:
-                self.history.extend(line.strip() for line in f.readlines())
-        self.old_history_index = len(self.history)
-        self.history_index = self.old_history_index - 1
+                self.history_settings["history"].extend(
+                    line.strip() for line in f.readlines()
+                )
+        self.history_settings["old_history_index"] = len(
+            self.history_settings["history"]
+        )
+        self.history_settings["history_index"] = (
+            self.history_settings["old_history_index"] - 1
+        )
 
 
 def main():
     """Main entry point"""
     handler = CommandHandler()
-    print(f"{COLOR}{PROMPT}{DEFAULT}", end="", flush=True)
+    print(f"{YELLOW}{PROMPT}{DEFAULT}", end="", flush=True)
     listen_keyboard(
         on_press=handler.process_key,
         on_release=handler.on_release,
