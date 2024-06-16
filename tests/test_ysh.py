@@ -32,8 +32,11 @@ class TestYsh(unittest.TestCase):
         result = self.handler.exec_command("echo Test")
 
         self.assertTrue(result)
-        self.assertIn("echo Test", self.handler.history)
-        self.assertEqual(self.handler.history_index, len(self.handler.history))
+        self.assertIn("echo Test", self.handler.history_settings["history"])
+        self.assertEqual(
+            self.handler.history_settings["history_index"],
+            len(self.handler.history_settings["history"]),
+        )
         mock_run.assert_called_with(
             ["echo", "Test"],
             stdin=subprocess.PIPE,
@@ -47,7 +50,7 @@ class TestYsh(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdirname:
             self.handler.ch_dir(tmpdirname)
             self.assertEqual(os.getcwd(), tmpdirname)
-            self.assertIn(f"cd {tmpdirname}", self.handler.history)
+            self.assertIn(f"cd {tmpdirname}", self.handler.history_settings["history"])
 
         try:
             self.handler.ch_dir("/nonexistent_directory")
@@ -58,29 +61,37 @@ class TestYsh(unittest.TestCase):
         """test if key press is properly stored and processed in the buffer"""
         self.handler.buffer = list("echo Hello")
         self.handler.process_key("enter")
-        self.assertIn("echo Hello", self.handler.history)
+        self.assertIn("echo Hello", self.handler.history_settings["history"])
 
         self.handler.buffer = list("cd /tmp")
         self.handler.process_key("enter")
-        self.assertIn("cd /tmp", self.handler.history)
+        self.assertIn("cd /tmp", self.handler.history_settings["history"])
 
     def test_handle_history_event(self):
         """test if the history is properly retrieved"""
-        self.handler.history = ["cmd1", "cmd2", "cmd3"]
-        self.handler.history_index = 3
+        self.handler.history_settings["history"] = ["cmd1", "cmd2", "cmd3"]
+        self.handler.history_settings["history_index"] = 3
         self.handler.handle_history_event("up")  # initial up will bring up last command
-        self.assertEqual(self.handler.buffer, list(self.handler.history[2]))
+        self.assertEqual(
+            self.handler.buffer, list(self.handler.history_settings["history"][2])
+        )
         self.handler.handle_history_event("up")
-        self.assertEqual(self.handler.buffer, list(self.handler.history[1]))
+        self.assertEqual(
+            self.handler.buffer, list(self.handler.history_settings["history"][1])
+        )
 
         self.handler.handle_history_event("down")
-        self.assertEqual(self.handler.buffer, list(self.handler.history[2]))
+        self.assertEqual(
+            self.handler.buffer, list(self.handler.history_settings["history"][2])
+        )
 
-        self.handler.history_index = 3
+        self.handler.history_settings["history_index"] = 3
         self.handler.handle_history_event("down")
-        self.assertEqual(self.handler.buffer, list(self.handler.history[2]))
+        self.assertEqual(
+            self.handler.buffer, list(self.handler.history_settings["history"][2])
+        )
 
-        self.handler.history = []
+        self.handler.history_settings["history"] = []
         self.handler.handle_history_event("down")
         self.assertEqual(self.handler.buffer, list(""))
 
@@ -99,13 +110,13 @@ class TestYsh(unittest.TestCase):
         """test if the history is persistent"""
         test_history = ["echo Hello", "ls", "cd /"]
         self.handler.init_history()
-        self.handler.history.extend(test_history[:])
+        self.handler.history_settings["history"].extend(test_history[:])
         self.handler.save_history()
 
         handler2 = CommandHandler()
         handler2.init_history()
 
-        self.assertEqual(handler2.history[-3:], test_history)
+        self.assertEqual(handler2.history_settings["history"][-3:], test_history)
 
 
 if __name__ == "__main__":
